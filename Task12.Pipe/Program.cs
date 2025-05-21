@@ -6,7 +6,6 @@ using System.IO.Pipelines;
 
 // Запись чтение long из PIPE порции long
 
-
 var N = 10_000;
 var BATCH = 10;
 var READ_DELAY = TimeSpan.FromMilliseconds(2000);
@@ -16,7 +15,6 @@ long max = -1;
 var sw = Stopwatch.StartNew();
 
 var pipe = new Pipe();
-
 
 var t1 = Task.Run(async () =>
 {
@@ -80,8 +78,6 @@ var t2 = Task.Run(async () =>
 
         foreach (var i in list)
         {
-
-
             if (i % 1000 == 0)
                 Console.WriteLine("Read " + i);
 
