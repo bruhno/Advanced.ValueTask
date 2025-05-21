@@ -1,37 +1,41 @@
-﻿using System;
-using System.Buffers;
+﻿using System.Buffers;
 using System.Buffers.Binary;
-using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.IO.Pipelines;
 
-var N = 1e6;
 
+// Запись чтение long из PIPE порции long
+
+
+var N = 10_000;
+var BATCH = 10;
+var READ_DELAY = TimeSpan.FromMilliseconds(2000);
+var WRITE_DELAY = TimeSpan.FromMilliseconds(3000);
 long max = -1;
 
 var sw = Stopwatch.StartNew();
 
 var pipe = new Pipe();
 
+
 var t1 = Task.Run(async () =>
 {
-    var i = 0;
+    long i = 0;
 
     var writer = pipe.Writer;
 
-    while (i <= N*10)
+    while (i < N)
     {
         var span = writer.GetSpan(80);
 
-        for (var j = 0; j < 10; j++)
+        for (var j = 0; j < BATCH; j++)
         {
-            BinaryPrimitives.TryWriteInt64LittleEndian(span.Slice(8*j), ++i);
-            //Console.WriteLine("write:" + i);            
+            BinaryPrimitives.TryWriteInt64LittleEndian(span.Slice(8 * j), ++i);
             writer.Advance(8);
-            
+
         }
 
-
+        if (i % 1000 == 0) await Task.Delay(WRITE_DELAY);
 
         var r = await writer.FlushAsync();
 
@@ -43,7 +47,6 @@ var t1 = Task.Run(async () =>
 
     max = i;
 
-    //writer.Complete();
     Console.WriteLine("Writing complete");
 });
 
@@ -51,11 +54,18 @@ var t2 = Task.Run(async () =>
 {
     var reader = pipe.Reader;
 
-
-
     while (true)
     {
+        var a = sw.ElapsedMilliseconds;
+
         var r = await reader.ReadAsync();
+
+        var pause = sw.ElapsedMilliseconds - a;
+
+        if (pause > 100)
+        {
+            Console.WriteLine($"read pause {pause} ms");
+        }
 
         if (r.IsCompleted)
         {
@@ -66,18 +76,27 @@ var t2 = Task.Run(async () =>
 
         var list = ReadLong(buffer);
 
+        await Task.Delay(READ_DELAY);
+
         foreach (var i in list)
         {
+
+
+            if (i % 1000 == 0)
+                Console.WriteLine("Read " + i);
+
             if (i == max)
             {
                 Console.WriteLine("Reading complete ");
+                Console.WriteLine("max= " + i);
                 return;
             }
-
         }
 
-        reader.AdvanceTo(buffer.GetPosition(8 * list.Count()));
-    }    
+        var next = buffer.GetPosition(8 * list.Count());
+
+        reader.AdvanceTo(next);
+    }
 });
 
 static IEnumerable<long> ReadLong(in ReadOnlySequence<byte> buffer)

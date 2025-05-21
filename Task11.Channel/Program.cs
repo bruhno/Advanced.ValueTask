@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 using var cts = new CancellationTokenSource();
@@ -6,6 +7,9 @@ using var cts = new CancellationTokenSource();
 var channel = Channel.CreateBounded<long>(5);
 
 var N = 1e7;
+
+
+var completed = false;
 
 var sw = Stopwatch.StartNew();
 
@@ -23,24 +27,46 @@ var t1 = Task.Run(async () =>
     Console.WriteLine("Writing complete");
 });
 
-var t2 = Task.Run(async () =>
+var t2 = Task.Run(Read);
+var t3 = Task.Run(Read);
+
+
+async Task Read() 
 {
     var reader = channel.Reader;
+    var cnt = 0;
 
     while (true)
     {
-        var i = await reader.ReadAsync(cts.Token);
-
-        if (i == N)
+        try
         {
-            Console.WriteLine("Reading complete");
+            var i = await reader.ReadAsync(cts.Token);
+
+            cnt++;
+
+            if (i == N)
+            {
+                completed = true;
+            }
+        } catch (OperationCanceledException)
+        {
+            Console.WriteLine("Reading cancelled: "+cnt);
+            return;
+        }
+
+        if (completed)
+        {
+
+            Console.WriteLine("Reading complete: "+cnt);
+            cts.Cancel();
             return;
         }
     }
 
-});
+}
 
-await Task.WhenAll(t1, t2);
+
+await Task.WhenAll(t1, t2, t3);
 
 Console.WriteLine(sw.ElapsedMilliseconds);
 
